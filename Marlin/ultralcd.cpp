@@ -268,6 +268,10 @@ static void lcd_goto_menu(menuFunc_t menu, const bool feedback = false, const ui
   }
 }
 
+inline void lcd_save_previous_menu() { prevMenu = currentMenu; prevEncoderPosition = encoderPosition; }
+
+static void lcd_goto_previous_menu() { lcd_goto_menu(prevMenu, true, prevEncoderPosition); }
+
 /**
  *
  * "Info Screen"
@@ -466,7 +470,7 @@ void lcd_set_home_offsets() {
       lcdDrawUpdate = 1;
     }
     if (lcdDrawUpdate) lcd_implementation_drawedit(msg, "");
-    if (LCD_CLICKED) lcd_goto_menu(lcd_tune_menu);
+    if (LCD_CLICKED) lcd_goto_previous_menu();
   }
   static void lcd_babystep_x() { _lcd_babystep(X_AXIS, PSTR(MSG_BABYSTEPPING_X)); }
   static void lcd_babystep_y() { _lcd_babystep(Y_AXIS, PSTR(MSG_BABYSTEPPING_Y)); }
@@ -824,21 +828,17 @@ float move_menu_scale;
 static void lcd_move_menu_axis();
 
 static void _lcd_move(const char* name, AxisEnum axis, int min, int max) {
-  if (encoderPosition != 0) {
+  if ((encoderPosition != 0) && (movesplanned() <= 3)) {
     refresh_cmd_timeout();
     current_position[axis] += float((int)encoderPosition) * move_menu_scale;
     if (min_software_endstops) NOLESS(current_position[axis], min);
     if (max_software_endstops) NOMORE(current_position[axis], max);
     encoderPosition = 0;
-    if (movesplanned() <= 3)
-      line_to_current(axis);
+    line_to_current(axis);
     lcdDrawUpdate = 1;
   }
   if (lcdDrawUpdate) lcd_implementation_drawedit(name, ftostr31(current_position[axis]));
-  if (LCD_CLICKED) {
-      line_to_current(axis);
-      lcd_goto_menu(lcd_move_menu_axis);
-  }
+  if (LCD_CLICKED) lcd_goto_previous_menu();
 }
 #if ENABLED(DELTA)
   static float delta_clip_radius_2 =  DELTA_PRINTABLE_RADIUS * DELTA_PRINTABLE_RADIUS;
@@ -859,7 +859,7 @@ static void lcd_move_e(
     unsigned short original_active_extruder = active_extruder;
     active_extruder = e;
   #endif
-  if (encoderPosition != 0) {
+  if ((encoderPosition != 0) && (movesplanned() <= 3)) {
     current_position[E_AXIS] += float((int)encoderPosition) * move_menu_scale;
     encoderPosition = 0;
     line_to_current(E_AXIS);
@@ -883,7 +883,7 @@ static void lcd_move_e(
     #endif //EXTRUDERS > 1
     lcd_implementation_drawedit(pos_label, ftostr31(current_position[E_AXIS]));
   }
-  if (LCD_CLICKED) lcd_goto_menu(lcd_move_menu_axis);
+  if (LCD_CLICKED) lcd_goto_previous_menu();
   #if EXTRUDERS > 1
     active_extruder = original_active_extruder;
   #endif
@@ -1282,7 +1282,7 @@ static void lcd_control_volumetric_menu() {
         lcd_implementation_drawedit(PSTR(MSG_CONTRAST), itostr2(lcd_contrast));
       #endif
     }
-    if (LCD_CLICKED) lcd_goto_menu(lcd_control_menu);
+    if (LCD_CLICKED) lcd_goto_previous_menu();
   }
 #endif // HAS_LCD_CONTRAST
 
@@ -1381,15 +1381,14 @@ static void lcd_control_volumetric_menu() {
       lcd_implementation_drawedit(editLabel, _strFunc(((_type)((int32_t)encoderPosition + minEditValue)) / scale)); \
     if (isClicked) { \
       *((_type*)editValue) = ((_type)((int32_t)encoderPosition + minEditValue)) / scale; \
-      lcd_goto_menu(prevMenu, prevEncoderPosition); \
+      lcd_goto_previous_menu(); \
     } \
     return isClicked; \
   } \
   void menu_edit_ ## _name () { _menu_edit_ ## _name(); } \
   void menu_edit_callback_ ## _name () { if (_menu_edit_ ## _name ()) (*callbackFunc)(); } \
   static void _menu_action_setting_edit_ ## _name (const char* pstr, _type* ptr, _type minValue, _type maxValue) { \
-    prevMenu = currentMenu; \
-    prevEncoderPosition = encoderPosition; \
+    lcd_save_previous_menu(); \
     \
     lcdDrawUpdate = 2; \
     currentMenu = menu_edit_ ## _name; \
@@ -1506,7 +1505,7 @@ void lcd_quick_feedback() {
  *
  */
 static void menu_action_back(menuFunc_t func) { lcd_goto_menu(func); }
-static void menu_action_submenu(menuFunc_t func) { lcd_goto_menu(func); }
+static void menu_action_submenu(menuFunc_t func) { lcd_save_previous_menu(); lcd_goto_menu(func); }
 static void menu_action_gcode(const char* pgcode) { enqueuecommands_P(pgcode); }
 static void menu_action_function(menuFunc_t func) { (*func)(); }
 
@@ -2243,7 +2242,7 @@ char* ftostr52(const float& x) {
    *   - Click saves the Z and goes to the next mesh point
    */
   static void _lcd_level_bed() {
-    if (encoderPosition != 0) {
+    if ((encoderPosition != 0) && (movesplanned() <= 3)) {
       refresh_cmd_timeout();
       current_position[Z_AXIS] += float((int)encoderPosition) * MBL_Z_STEP;
       if (min_software_endstops) NOLESS(current_position[Z_AXIS], Z_MIN_POS);
